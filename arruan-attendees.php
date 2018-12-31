@@ -8,8 +8,10 @@ Domain Path: /languages
 
 add_action( 'wp_enqueue_scripts', 'arruan_attendee_enqueue' );
 function arruan_attendee_enqueue() {
-    wp_enqueue_script( 'arruan-attendee-script-ajax', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
-    wp_localize_script( 'arruan-attendee-script-ajax', 'arruan_attendee_post_url', admin_url('admin-ajax.php'));
+    wp_enqueue_script('arruan-attendee-script-ajax', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
+    wp_localize_script('arruan-attendee-script-ajax', 'arruan_attendee_post_url', admin_url('admin-ajax.php'));
+    wp_register_style('arruan-attendee-style', plugin_dir_url( __FILE__ )  . 'public/css/style.css');
+    wp_enqueue_style('arruan-attendee-style');
 }
 
 add_action( 'wp_ajax_arruan-attendee-post', 'arruan_attendee_post_action');
@@ -25,8 +27,9 @@ function arruan_attendee_post_action() {
 
     $value = $_POST['value'];
     $postId = $_POST['postId'];
+    $friendCount = $_POST['friends'];
 
-    if (!isset($value) || !isset($postId)) {
+    if (!isset($value) || !isset($postId) || !isset($friendCount)) {
         wp_send_json_error('Invalid params');
     }
 
@@ -49,6 +52,19 @@ function arruan_attendee_post_action() {
     } else {
         $newAttendee['playing'] = false;
         $newAttendee['eating'] = false;
+        $absentCount = 1;
+    }
+
+    if ($friendCount > 0) {
+        $playerCount += $friendCount;
+        $friends = [];
+        for ($i = 0; $i < $friendCount; $i++) {
+            $friend = [];
+            // TODO: manage eating of friends
+            $friend['eating'] = false;
+            array_push($friends, $friend);
+        }
+        $newAttendee['friends'] = $friends;
     }
 
     $newAttendees = [$newAttendee];
@@ -67,6 +83,11 @@ function arruan_attendee_post_action() {
                 if ($attendee['playing']) {
                     $eaterCount++;
                 }
+                $attendeeFriends = $attendee['friends'];
+                if (isset($attendeeFriends)) {
+                    $playerCount += count($attendeeFriends);
+                    // TODO: manage eating of friends
+                }
             }
         }
     }
@@ -75,17 +96,22 @@ function arruan_attendee_post_action() {
     $ret = array();
     $ret['players'] = $playerCount;
     $ret['eaters'] = $eaterCount;
-    $ret['absents'] = $absentCount; 
-
-    $user = array();
-
-    $user['name'] = $newAttendee['userName'];
-    $user['playing'] = $newAttendee['playing'];
-    $user['eating'] = $newAttendee['eating'];
-
-    $ret['user'] = $user;
+    $ret['absents'] = $absentCount;
+    $ret['attendeeId'] = $newAttendee['userId'];
+    $ret['html'] = arruan_get_attendee_table_content($newAttendee);
 
     wp_send_json_success($ret);
+}
+
+function arruan_get_attendee_table_content($attendee) {
+    $ret = "<tr id='arruan-attendee-".$attendee['userId']."'><td>".$attendee['userName']."</td><td>".($attendee['playing'] ? 'Oui' : 'Non')."</td><td>".($attendee['eating'] ? 'Oui' : 'Non')."</td></tr>";
+    $friends = $attendee['friends'];
+    if (isset($friends)) {
+        foreach($friends as $idx=>$friend) {
+            $ret .= "<tr id='arruan-attendee-".$attendee['userId']."-friend-".$idx."'><td>Pote &laquo;&nbsp;à&nbsp;&raquo; ".$attendee['userName']."</td><td>Oui</td><td>".($friend['eating'] ? 'Oui' : 'Non')."</td></tr>";
+        }
+    } 
+    return $ret;
 }
 
 function arruan_display_attendee_content($atts) {
@@ -100,7 +126,7 @@ function arruan_display_attendee_content($atts) {
     $playerCount = 0;
     $eaterCount = 0;
     $absentCount = 0;
-    $userArray = [];
+    $attendees = [];
     $currentUserIsAnAttendee = false;
 
     $attendeesArray = get_post_custom_values('arruanAttendees', $postid);
@@ -115,39 +141,39 @@ function arruan_display_attendee_content($atts) {
             if ($attendee['eating']) {
                 $eaterCount++;
             }
-            $user = [];
-            $user['name'] = $attendee['userName'];
-            $user['playing'] = $attendee['playing'];
-            $user['eating'] = $attendee['eating'];
-            array_push($userArray, $user);
-
             if ($current_user->ID === $attendee['userId']) {
                 $currentUserIsAnAttendee = true;
+            }
+            $friends = $attendee['friends'];
+            if (isset($friends)) {
+                foreach($friends as $friend) {
+                    $playerCount++;
+                    $eaterCount += ($friend['eating'] ? 1 : 0);
+                }
             }
         }
     }
 
     $displayForm = $current_user->ID != 0 && !$currentUserIsAnAttendee;
+    $displayOpinionChangeLink = $current_user->ID != 0 && $currentUserIsAnAttendee;
 
     // begin output buffering
     ob_start();
     if ($displayForm === true) {
         ?>
-        <p>
         <form action="" id="arruan-attendee-form">
             <input type="submit" id="arruan-attendee-player-and-eater" value="Je viens et je mange"/>
             <input type="submit" id="arruan-attendee-player-only" value="Je viens seulement"/>
             <input type="submit" id="arruan-attendee-no-player" value="J'abandonne les copains"/>
             <input id="arruan-attendee-post-id" type="hidden" value="<?php echo $postid ?>">
         </form>
-        </p>
+        <br style="clear:both">
         <?php
     }
     ?>
     <p>
     <strong><span id="arruan-attendee-player-count"><?php echo $playerCount ?></span> Joueur(s) | <span id="arruan-attendee-eater-count"><?php echo $eaterCount ?></span> Glouton(s) | <span id="arruan-attendee-absent-count"><?php echo $absentCount ?></span> Absent(s)</strong>
     </p>
-    <p>
     <table id="arruan-attendee-table" >
         <thead>
 	<tr>
@@ -158,15 +184,26 @@ function arruan_display_attendee_content($atts) {
         </thead>
         <tbody>
         <?php
-        foreach ($userArray as $user) {
-            ?>
-            <tr><td><?php echo $user['name']; ?></td><td><?php echo $user['playing'] ? 'Oui' : 'Non' ?></td><td><?php echo $user['eating'] ? 'Oui' : 'Non' ?></td></tr>
-            <?php
+        foreach ($attendees as $attendee) {
+            echo arruan_get_attendee_table_content($attendee);
         }
         ?>
         </tbody>
     </table>
+    <br style="clear:both">
+    <p id="arruan-attendee-opinion-change-container" style="<?php echo ($displayOpinionChangeLink ? '': 'display:none'); ?>">
+        <a id="arruan-attendee-opinion-change-link" href="#">Je change d'avis</a>
     </p>
+    <form action="" id="arruan-attendee-opinion-change-form" style="display:none">
+        <select id="arruan-attendee-opinion-change-status">
+            <option value="player_and_eater">Je viens et je mange</option>
+            <option value="player_only">Je viens seulement</option>
+            <option value="no_player">J'abandonne les copains</option>
+        </select>
+        <input type="number" id="arruan-attendee-opinion-change-friends" placeholder="Des amis à amener ?"/>
+        <input type="submit" id="arruan-attendee-opinion-change-submit" value="Valider"/>
+        <input id="arruan-attendee-opinion-change-post-id" type="hidden" value="<?php echo $postid ?>">
+    <form>
     <?php
     // end output buffering, grab the buffer contents, and empty the buffer
     return ob_get_clean();

@@ -1,0 +1,10 @@
+#arruan-attendee-opinion-change-form > input,select {
+  display: block;
+  width: 70%;
+  margin: 1em;
+}
+
+#arruan-attendee-table > thead tr th:first-child,
+tbody tr td:first-child {
+  width: 50%;
+}
