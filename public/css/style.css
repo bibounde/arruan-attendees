@@ -4,7 +4,6 @@
   margin: 1em;
 }
 
-#arruan-attendee-table > thead tr th:first-child,
-tbody tr td:first-child {
+#arruan-attendee-table > thead > tr > th:first-child {
   width: 50%;
 }
