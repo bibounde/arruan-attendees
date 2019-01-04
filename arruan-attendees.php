@@ -194,16 +194,17 @@ function arruan_display_attendee_content($atts) {
     <p id="arruan-attendee-opinion-change-container" style="<?php echo ($displayOpinionChangeLink ? '': 'display:none'); ?>">
         <a id="arruan-attendee-opinion-change-link" href="#">Je change d'avis</a>
     </p>
-    <form action="" id="arruan-attendee-opinion-change-form" style="display:none">
+    <!-- Not a form to avoid comment subscription conflict -->
+    <p id="arruan-attendee-opinion-change-form" style="display:none">
         <select id="arruan-attendee-opinion-change-status">
             <option value="player_and_eater">Je viens et je mange</option>
             <option value="player_only">Je viens seulement</option>
             <option value="no_player">J'abandonne les copains</option>
         </select>
         <input type="number" id="arruan-attendee-opinion-change-friends" placeholder="Des amis à amener ?"/>
-        <input type="submit" id="arruan-attendee-opinion-change-submit" value="Valider"/>
+        <input type="button" id="arruan-attendee-opinion-change-submit" value="Valider"/>
         <input id="arruan-attendee-opinion-change-post-id" type="hidden" value="<?php echo $postid ?>">
-    <form>
+    <p/>
     <?php
     // end output buffering, grab the buffer contents, and empty the buffer
     return ob_get_clean();

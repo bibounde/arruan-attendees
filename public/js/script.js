@@ -18,10 +18,12 @@ jQuery(document).on('click', '#arruan-attendee-opinion-change-link', function(e)
     jQuery('#arruan-attendee-opinion-change-form').toggle();
 });
 
-jQuery(document).on('submit', '#arruan-attendee-opinion-change-form', function(e) {
+// Do not use submit event due to comment subscription button conflict
+jQuery(document).on('click', '#arruan-attendee-opinion-change-submit', function(e) {
     e.preventDefault();
     sendArruanAttendeeStatus(jQuery('#arruan-attendee-opinion-change-status').val(), jQuery('#arruan-attendee-opinion-change-post-id').val(), jQuery('#arruan-attendee-opinion-change-friends').val());
 });
+
 
 function sendArruanAttendeeStatus(status, postId, friends = 0) {
     jQuery.ajax({
