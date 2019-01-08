@@ -211,3 +211,74 @@ function arruan_display_attendee_content($atts) {
 }
 add_shortcode('arruan_attendee_form', 'arruan_display_attendee_content');
 
+function display_arruan_attendee_fields( $user ) { 
+    $isAttendee = 'true' == get_user_meta($user->ID, 'arruan_attendee', true);
+    $needAttendeeReminder = $isAttendee && 'true' == get_user_meta($user->ID, 'arruan_attendee_reminder', true);
+   
+    if ($isAttendee || $needAttendeeReminder) {
+        ?>
+        <h3>Club des Arruanais</h3>
+        <?php
+    }
+    ?>
+    <table class="form-table">
+    <?php
+    if (current_user_can( 'edit_users', $user->ID )) {
+        ?>
+        <tr >
+            <th scope="row">Participe aux évènements</th>
+            <td>
+                <fieldset>
+                    <legend class="screen-reader-text"><span>Participe aux évènements</span></legend>
+                    <label for="arruan_attendee">
+                        <input name="arruan_attendee" type="checkbox" id="arruan_attendee" <?php echo $isAttendee ? 'checked' : '' ?>>
+                        Affiche les boutons de participations aux évènements (entraînements, matchs)
+                    </label>
+                    <br>
+                </fieldset>
+            </td>
+        </tr>   
+        <?php
+    }
+    if ( wp_get_current_user()->ID == $user->ID && $isAttendee) {
+        ?>
+        <tr >
+            <th scope="row">Rappels d'évènements</th>
+            <td>
+                <fieldset>
+                    <legend class="screen-reader-text"><span>Recevoir les rappels de participation</span></legend>
+                    <label for="arruan_attendee_reminder">
+                        <input name="arruan_attendee_reminder" type="checkbox" id="arruan_attendee_reminder" <?php echo $needAttendeeReminder ? 'checked' : '' ?>>
+                        Vous recevrez des emails vous rappelant de vous inscrire aux évènements du club (entraînements, matchs)
+                    </label>
+                    <br>
+                </fieldset>
+            </td>
+        </tr>
+        <?php
+    }
+    ?>
+    </table> 
+    <?php
+}
+
+add_action( 'edit_user_profile', 'display_arruan_attendee_fields' );
+add_action( 'show_user_profile', 'display_arruan_attendee_fields' );
+
+function save_arruan_attendee_admin_fields( $user_id ) {
+    if (!current_user_can( 'edit_users', $user_id )) { 
+        return false; 
+    }
+    update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );
+}
+
+add_action( 'edit_user_profile_update', 'save_arruan_attendee_admin_fields' );
+
+function save_arruan_attendee_profile_fields( $user_id ) {
+    if (current_user_can( 'edit_users', $user_id )) { 
+        update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );     
+    }
+    update_user_meta( $user_id, 'arruan_attendee_reminder', 'on' == $_POST['arruan_attendee_reminder'] ? 'true' : 'false' );
+}
+
+add_action( 'personal_options_update', 'save_arruan_attendee_profile_fields' );
