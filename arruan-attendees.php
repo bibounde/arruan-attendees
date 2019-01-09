@@ -21,9 +21,12 @@ add_action( 'wp_ajax_arruan-attendee-post', 'arruan_attendee_post_action');
 function arruan_attendee_post_action() {
 
     $currentUser = wp_get_current_user();
-    if ($currentUser->ID == 0){
+    // Operation not permitted if user is not logged in nor allowed to participate
+    if ($currentUser->ID == 0 || 'true' != get_user_meta($currentUser->ID, 'arruan_attendee', true)){
         wp_send_json_error('Operation not permitted');
     }
+
+    
 
     $value = $_POST['value'];
     $postId = $_POST['postId'];
@@ -153,9 +156,9 @@ function arruan_display_attendee_content($atts) {
             }
         }
     }
-
-    $displayForm = $current_user->ID != 0 && !$currentUserIsAnAttendee;
-    $displayOpinionChangeLink = $current_user->ID != 0 && $currentUserIsAnAttendee;
+    $isAllowedToBeAnAttendee = 'true' == get_user_meta($current_user->ID, 'arruan_attendee', true);
+    $displayForm = $current_user->ID != 0 && !$currentUserIsAnAttendee && $isAllowedToBeAnAttendee;
+    $displayOpinionChangeLink = $current_user->ID != 0 && $currentUserIsAnAttendee && $isAllowedToBeAnAttendee;
 
     // begin output buffering
     ob_start();
@@ -215,7 +218,7 @@ function display_arruan_attendee_fields( $user ) {
     $isAttendee = 'true' == get_user_meta($user->ID, 'arruan_attendee', true);
     $needAttendeeReminder = $isAttendee && 'true' == get_user_meta($user->ID, 'arruan_attendee_reminder', true);
    
-    if ($isAttendee || $needAttendeeReminder) {
+    if ($isAttendee || current_user_can( 'edit_users', $user->ID )) {
         ?>
         <h3>Club des Arruanais</h3>
         <?php
@@ -270,6 +273,10 @@ function save_arruan_attendee_admin_fields( $user_id ) {
         return false; 
     }
     update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );
+    // If reminder status is not set. Default to true
+    if (empty(get_user_meta($user_id, 'arruan_attendee_reminder'))) {
+        update_user_meta( $user_id, 'arruan_attendee_reminder', 'true');
+    }
 }
 
 add_action( 'edit_user_profile_update', 'save_arruan_attendee_admin_fields' );
@@ -278,7 +285,8 @@ function save_arruan_attendee_profile_fields( $user_id ) {
     if (current_user_can( 'edit_users', $user_id )) { 
         update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );     
     }
-    update_user_meta( $user_id, 'arruan_attendee_reminder', 'on' == $_POST['arruan_attendee_reminder'] ? 'true' : 'false' );
+    
+    update_user_meta( $user_id, 'arruan_attendee_reminder', 'on' == $_POST['arruan_attendee_reminder'] ? 'true' : 'false');
 }
 
 add_action( 'personal_options_update', 'save_arruan_attendee_profile_fields' );
