@@ -6,6 +6,271 @@ Version: 0.1
 Domain Path: /languages
 */
 
+/**
+    Define Dev interval for cron management
+*/
+add_filter( 'cron_schedules', 'arruan_attendee_cron_dev_interval' );
+ 
+function arruan_attendee_cron_dev_interval( $schedules ) {
+    $schedules['dev_interval'] = array(
+        'interval' => 10,
+        'display'  => esc_html__( 'Every 10 Seconds' ),
+    );
+ 
+    return $schedules;
+}
+
+
+/*
+    Mailing management
+
+*/
+
+add_action( 'arruan_attendee_cron_set_event_reminder_scheduledates_hook', 'arruan_attendee_cron_set_event_reminder_scheduledates_exec' );
+add_action( 'arruan_attendee_cron_send_first_event_reminder_email_hook', 'arruan_attendee_cron_send_first_event_reminder_email_exec' );
+add_action( 'arruan_attendee_cron_send_second_event_reminder_email_hook', 'arruan_attendee_cron_send_second_event_reminder_email_exec' );
+
+if( !wp_next_scheduled( 'arruan_attendee_cron_set_event_reminder_scheduledates_hook' ) ) {
+    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_set_event_reminder_scheduledates_hook' );
+}
+
+if( !wp_next_scheduled( 'arruan_attendee_cron_send_first_event_reminder_email_hook' ) ) {
+    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_send_first_event_reminder_email_hook' );
+}
+
+if( !wp_next_scheduled( 'arruan_attendee_cron_send_second_event_reminder_email_hook' ) ) {
+    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_send_second_event_reminder_email_hook' );
+}
+
+/**
+    Applies reminder schedule dates to event posts
+*/
+function arruan_attendee_cron_set_event_reminder_scheduledates_exec() {
+    arruan_attendee_debug("Retrieving 5 posts without reminder schedule dates");
+    // Retrievs posts whitout reminder schedule dates
+    $postQuery = array (
+        'post_type' => 'event',
+        'meta_query' => array(
+            'relation' => 'OR',
+            array (
+                'key'     => 'arruan_attendee_reminder_first_schedule_date',
+                'compare' => 'NOT EXISTS'
+            ),
+            array (
+                'key'     => 'arruan_attendee_reminder_second_schedule_date',
+                'compare' => 'NOT EXISTS'
+            )
+        )
+    );    
+    
+    $posts = get_posts($postQuery);
+    arruan_attendee_debug("Found " . sizeof($posts) . " posts");
+    foreach ( $posts as $post ) {
+        arruan_attendee_debug("Setting schedule dates to post " . $post->ID . "/" . $post->post_title);
+        // Setting schedule dates (UTC)
+        $eventStartDate = get_post_custom_values('_event_start_date', $post->ID)[0];
+        
+        update_post_meta($post->ID, 'arruan_attendee_reminder_first_schedule_date', (new DateTime($eventStartDate))->sub(new DateInterval('P6D'))->format('Y-m-d'));
+        update_post_meta($post->ID, 'arruan_attendee_reminder_first_status', 'init');
+        update_post_meta($post->ID, 'arruan_attendee_reminder_second_schedule_date', (new DateTime($eventStartDate))->sub(new DateInterval('P1D'))->format('Y-m-d'));
+        update_post_meta($post->ID, 'arruan_attendee_reminder_second_status', 'init');
+    }
+}
+
+/** 
+
+    Sends reminder emails
+*/
+function arruan_attendee_cron_send_first_event_reminder_email_exec() {
+    arruan_attendee_cron_send_event_reminder_email_exec('first');
+}
+
+function arruan_attendee_cron_send_second_event_reminder_email_exec() {
+    arruan_attendee_cron_send_event_reminder_email_exec('second');   
+}
+
+function arruan_attendee_cron_send_event_reminder_email_exec($level) {  
+    arruan_attendee_debug("Sending reminder emails (". $level .")");
+
+    // Retrieves event to remind (UTC)
+    $now = new DateTime('now');
+    $postQuery = array (
+        'post_type' => 'event',
+        'meta_query' => array(
+            'relation' => 'AND',
+            array(
+                'key'     => 'arruan_attendee_reminder_'. $level .'_schedule_date',
+                'value'   => $now->format('Y-m-d'),
+                'compare' => '=',
+                'type'    => 'DATE'
+            ),
+            array(
+                'key'     => 'arruan_attendee_reminder_'. $level .'_status',
+                'value'   => 'init',
+                'compare' => '='
+            )
+        )
+    ); 
+
+    $posts = get_posts($postQuery);
+    arruan_attendee_debug("Found " . sizeof($posts) . " posts");
+
+    if (sizeof($posts) > 0) {
+        // Retrieves candidate users 
+        $userQuery = array (
+        'meta_query' => array(
+            'relation' => 'AND',
+            array (
+                'key'     => 'arruan_attendee',
+                'value'   => 'true',
+                'compare' => '='
+            ),
+            array(
+                'key'     => 'arruan_attendee_reminder',
+                'value'   => 'true',
+                'compare' => '='
+                )
+            )
+        );
+
+        $users = get_users($userQuery);
+
+        $userMap = array();
+        $userIds = array();
+        
+        arruan_attendee_debug("Found " . sizeof($users) . " candidate users");
+        foreach ( $users as $user ) {
+            $userMap[$user->ID] = $user;
+            $userIds[] = $user->ID;
+            arruan_attendee_debug($user->user_nicename);
+        }
+
+        foreach ( $posts as $post ) {
+            arruan_attendee_debug("Processing reminder for event " . $post->ID . " - " . $post->post_title);
+
+            // Prepares attendee's id list
+            $attendeeIds = array();
+            $attendeesArray = get_post_custom_values('arruanAttendees', $post->ID);
+            if (isset($attendeesArray)) {
+                $attendees = json_decode($attendeesArray[0], true);
+                foreach ($attendees as $attendee) {
+                    $attendeeIds[] = $attendee['userId'];
+                }
+            }
+
+            arruan_attendee_debug("Post has ". sizeof($attendeeIds) . " attendees");
+            $reminderUserIds = array_diff($userIds, $attendeeIds);
+
+            arruan_attendee_debug("Need to send reminder to ". sizeof($reminderUserIds) . " users");
+
+            foreach ( $reminderUserIds as $id ) {
+                arruan_attendee_debug("Sending reminder to user " . $id);
+                $userToRemind = $userMap[$id];
+
+                //arruan_attendee_send_remind_email($userToRemind->user_email, $post->post_title, new DateTime(get_post_custom_values('_event_start_date', $post->ID)[0]), get_permalink($post->ID));
+            }
+
+            arruan_attendee_debug("Saving post reminder status");
+            $currentStatus = get_post_custom_values('arruan_attendee_reminder_'.$level.'_status', $post->ID)[0];
+
+            update_post_meta($post->ID, 'arruan_attendee_reminder_'.$level.'_status', 'done');
+
+            arruan_attendee_debug("Post reminder status saved");
+
+        }
+
+        arruan_attendee_debug("All reminder are sent");
+
+    }
+}
+
+function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $eventLink) {
+    arruan_attendee_debug("Sending remind to " . $target);
+
+    $options = get_option('arruan_attendee_options');
+
+    // See https://sendgrid.com/docs/ui/sending-email/how-to-send-an-email-with-dynamic-transactional-templates/#additional-resources for json construction
+    $data = array();
+    $data['template_id'] = options['arruan_attendee_sendgrid_template_id'];
+    $from = array(
+        'email' => options['arruan_attendee_sendgrid_template_id']
+    );
+    $data['from'] = $from;
+
+    $personalization = array();
+    $personalization['subject'] = $eventTitle;
+    $tos = array();
+    $to = array(
+        'email' => $target
+    );
+    $tos[] = $to;
+
+    $personalization['to'] = $tos;
+
+    $templateData = array();
+
+    $formattedDate = date_i18n('l j F Y', $eventDate->getTimestamp());
+
+    $event = array(
+        'title' => $eventTitle,
+        'date' => $formattedDate,
+        'link' => $eventLink
+    );
+
+    $templateData['event'] = $event;
+    $personalization['dynamic_template_data'] = $templateData;
+
+    $personalizations = array();
+    array_push($personalizations, $personalization);
+
+    $data['personalizations'] = $personalizations;
+
+    $payload = json_encode($data, JSON_UNESCAPED_SLASHES);
+
+    arruan_attendee_debug("Calling Sendgrid API: ". $payload);
+
+    
+    // Prepare new cURL resource
+    $ch = curl_init('https://api.sendgrid.com/v3/mail/send');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLINFO_HEADER_OUT, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+
+    // Set HTTP Header for POST request 
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+        'Content-Type: application/json',
+        'Content-Length: ' . strlen($payload),
+        'Authorization: Bearer '. options['arruan_attendee_sendgrid_api_key'])
+    );
+
+    // Submit the POST request
+    $result = curl_exec($ch);
+
+    // Vérification si une erreur est survenue
+    if(curl_errno($ch)) {
+        $info = curl_getinfo($ch);
+        arruan_attendee_error("Unable to send email to " . $target . ". Error code: " . $info['http_code']);
+    } else {
+        $resultArray = json_decode($result, true);
+
+        if (isset($resultArray['errors'])) {
+            arruan_attendee_error("Unable to send email to " . $target . ": " . $result);
+        } else {
+            arruan_attendee_debug("Email sent to ". $target);    
+        }
+    }
+
+    // Close cURL session handle
+    curl_close($ch); 
+    
+}
+
+/**
+
+    Attendee form management
+
+*/
 add_action( 'wp_enqueue_scripts', 'arruan_attendee_enqueue' );
 function arruan_attendee_enqueue() {
     wp_enqueue_script('arruan-attendee-script-ajax', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
@@ -272,7 +537,7 @@ function save_arruan_attendee_admin_fields( $user_id ) {
     if (!current_user_can( 'edit_users', $user_id )) { 
         return false; 
     }
-    update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );
+    update_user_meta( $user_id, 'arruan_attendee', isset($_POST["arruan_attendee"]) && 'on' == $_POST['arruan_attendee'] ? 'true' : 'false');
     // If reminder status is not set. Default to true
     if (empty(get_user_meta($user_id, 'arruan_attendee_reminder'))) {
         update_user_meta( $user_id, 'arruan_attendee_reminder', 'true');
@@ -283,10 +548,105 @@ add_action( 'edit_user_profile_update', 'save_arruan_attendee_admin_fields' );
 
 function save_arruan_attendee_profile_fields( $user_id ) {
     if (current_user_can( 'edit_users', $user_id )) { 
-        update_user_meta( $user_id, 'arruan_attendee', 'on' == $_POST['arruan_attendee'] ? 'true' : 'false' );     
+        update_user_meta( $user_id, 'arruan_attendee', isset($_POST["arruan_attendee"]) && 'on' == $_POST['arruan_attendee'] ? 'true' : 'false');
     }
     
-    update_user_meta( $user_id, 'arruan_attendee_reminder', 'on' == $_POST['arruan_attendee_reminder'] ? 'true' : 'false');
+    update_user_meta( $user_id, 'arruan_attendee_reminder', isset($_POST["arruan_attendee_reminder"]) && 'on' == $_POST['arruan_attendee_reminder'] ? 'true' : 'false');
 }
 
 add_action( 'personal_options_update', 'save_arruan_attendee_profile_fields' );
+
+
+/**
+
+    Settings page
+
+*/
+
+if (is_admin()) {
+    add_action('admin_init', 'arruan_attendee_admin_init' );
+    add_action('admin_menu', 'arruan_attendee_admin_menu');    
+}
+
+
+// Register our settings. Add the settings section, and settings fields
+function arruan_attendee_admin_init(){
+    register_setting('arruan_attendee_options', 'arruan_attendee_options', 'arruan_attendee_admin_validate');
+    add_settings_section('arruan_attendee_main_section', 'Envoi du rappel d\'inscription par email', 'arruan_attendee_main_section_callback', __FILE__);
+    add_settings_field('arruan_attendee_sendgrid_from', 'Email expéditeur*', 'arruan_attendee_admin_sendgrid_from_callback', __FILE__, 'arruan_attendee_main_section');
+    add_settings_field('arruan_attendee_sendgrid_api_key', 'Clef API Sendgrid*', 'arruan_attendee_admin_sendgrid_api_key_callback', __FILE__, 'arruan_attendee_main_section');
+    add_settings_field('arruan_attendee_sendgrid_template_id', 'ID template de mail Sendgrid*', 'arruan_attendee_admin_sendgrid_template_id_callback', __FILE__, 'arruan_attendee_main_section');
+}
+
+function arruan_attendee_main_section_callback() {
+
+}
+
+function arruan_attendee_admin_sendgrid_from_callback() {
+    $options = get_option('arruan_attendee_options');
+    echo "<input required id='arruan_attendee_sendgrid_from' name='arruan_attendee_options[arruan_attendee_sendgrid_from]' size='40' type='text' value='".$options['arruan_attendee_sendgrid_from']."' />";
+}
+
+function arruan_attendee_admin_sendgrid_api_key_callback() {
+    $options = get_option('arruan_attendee_options');
+    echo "<input required id='arruan_attendee_sendgrid_api_key' name='arruan_attendee_options[arruan_attendee_sendgrid_api_key]' size='40' type='text' value='".$options['arruan_attendee_sendgrid_api_key']."' />";
+}
+
+function arruan_attendee_admin_sendgrid_template_id_callback() {
+    $options = get_option('arruan_attendee_options');
+    echo "<input required id='arruan_attendee_sendgrid_template_id' name='arruan_attendee_options[arruan_attendee_sendgrid_template_id]' size='40' type='text' value='".$options['arruan_attendee_sendgrid_template_id']."' />";
+}
+
+// Add sub page to the Settings Menu
+function arruan_attendee_admin_menu() {
+    // add optiont to main settings panel
+    add_options_page('Inscription des Arruanais', 'Inscription des Arruanais', 'administrator', __FILE__, 'arruan_attendee_admin_menu_callback');
+}
+
+// Display the admin options page
+function arruan_attendee_admin_menu_callback() {
+    ?>
+        <div class="wrap">
+            <div class="icon32" id="icon-options-general"><br></div>
+            <h2>Inscriptions des Arruanais</h2>
+            Cette page permet de paramétrer la gestion du module d'inscription des Arruanais.
+            <form action="options.php" method="post">
+                        
+            <?php settings_fields('arruan_attendee_options'); ?>
+            <?php do_settings_sections(__FILE__); ?>
+            <p class="submit">
+                <input name="Submit" type="submit" class="button-primary" value="Enregistrer les modifications" />
+            </p>
+            </form>
+        </div>
+    <?php
+}
+
+// Validate user data for some/all of your input fields
+function arruan_attendee_admin_validate($input) {
+    // Check our textboxes option field contains no HTML tags - if so strip them out
+    $input['arruan_attendee_sendgrid_from'] =  wp_filter_nohtml_kses($input['arruan_attendee_sendgrid_from']);  
+    $input['arruan_attendee_sendgrid_api_key'] =  wp_filter_nohtml_kses($input['arruan_attendee_sendgrid_api_key']);  
+    $input['arruan_attendee_sendgrid_template_id'] =  wp_filter_nohtml_kses($input['arruan_attendee_sendgrid_template_id']);  
+    return $input; // return validated input
+}
+
+
+
+function arruan_attendee_debug($message) {
+    if (WP_DEBUG === true) {
+        if (is_array($message) || is_object($message)) {
+            error_log(print_r($message, true));
+        } else {
+            error_log($message);
+        }
+    }
+}
+
+function arruan_attendee_error($message) {
+    if (is_array($message) || is_object($message)) {
+        error_log(print_r($message, true));
+    } else {
+        error_log($message);
+    }
+}
