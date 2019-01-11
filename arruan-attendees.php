@@ -6,50 +6,36 @@ Version: 0.1
 Domain Path: /languages
 */
 
-/**
-    Define Dev interval for cron management
-*/
-add_filter( 'cron_schedules', 'arruan_attendee_cron_dev_interval' );
- 
-function arruan_attendee_cron_dev_interval( $schedules ) {
-    $schedules['dev_interval'] = array(
-        'interval' => 10,
-        'display'  => esc_html__( 'Every 10 Seconds' ),
-    );
- 
-    return $schedules;
-}
-
 
 /*
     Mailing management
 
 */
-
 add_action( 'arruan_attendee_cron_set_event_reminder_scheduledates_hook', 'arruan_attendee_cron_set_event_reminder_scheduledates_exec' );
 add_action( 'arruan_attendee_cron_send_first_event_reminder_email_hook', 'arruan_attendee_cron_send_first_event_reminder_email_exec' );
 add_action( 'arruan_attendee_cron_send_second_event_reminder_email_hook', 'arruan_attendee_cron_send_second_event_reminder_email_exec' );
 
 if( !wp_next_scheduled( 'arruan_attendee_cron_set_event_reminder_scheduledates_hook' ) ) {
-    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_set_event_reminder_scheduledates_hook' );
+    wp_schedule_event( time(), 'hourly', 'arruan_attendee_cron_set_event_reminder_scheduledates_hook' );
 }
 
 if( !wp_next_scheduled( 'arruan_attendee_cron_send_first_event_reminder_email_hook' ) ) {
-    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_send_first_event_reminder_email_hook' );
+    wp_schedule_event( time(), 'hourly', 'arruan_attendee_cron_send_first_event_reminder_email_hook' );
 }
 
 if( !wp_next_scheduled( 'arruan_attendee_cron_send_second_event_reminder_email_hook' ) ) {
-    wp_schedule_event( time(), 'dev_interval', 'arruan_attendee_cron_send_second_event_reminder_email_hook' );
+    wp_schedule_event( time(), 'hourly', 'arruan_attendee_cron_send_second_event_reminder_email_hook' );
 }
 
 /**
     Applies reminder schedule dates to event posts
 */
 function arruan_attendee_cron_set_event_reminder_scheduledates_exec() {
-    arruan_attendee_debug("Retrieving 5 posts without reminder schedule dates");
+    arruan_attendee_debug("Retrieving 20 posts without reminder schedule dates");
     // Retrievs posts whitout reminder schedule dates
     $postQuery = array (
         'post_type' => 'event',
+        'posts_per_page' => 20,
         'meta_query' => array(
             'relation' => 'OR',
             array (
@@ -167,7 +153,7 @@ function arruan_attendee_cron_send_event_reminder_email_exec($level) {
                 arruan_attendee_debug("Sending reminder to user " . $id);
                 $userToRemind = $userMap[$id];
 
-                //arruan_attendee_send_remind_email($userToRemind->user_email, $post->post_title, new DateTime(get_post_custom_values('_event_start_date', $post->ID)[0]), get_permalink($post->ID));
+                arruan_attendee_send_remind_email($userToRemind->user_email, $post->post_title, new DateTime(get_post_custom_values('_event_start_date', $post->ID)[0]), get_permalink($post->ID));
             }
 
             arruan_attendee_debug("Saving post reminder status");
@@ -191,9 +177,9 @@ function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $ev
 
     // See https://sendgrid.com/docs/ui/sending-email/how-to-send-an-email-with-dynamic-transactional-templates/#additional-resources for json construction
     $data = array();
-    $data['template_id'] = options['arruan_attendee_sendgrid_template_id'];
+    $data['template_id'] = $options['arruan_attendee_sendgrid_template_id'];
     $from = array(
-        'email' => options['arruan_attendee_sendgrid_template_id']
+        'email' => $options['arruan_attendee_sendgrid_from']
     );
     $data['from'] = $from;
 
@@ -241,7 +227,7 @@ function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $ev
     curl_setopt($ch, CURLOPT_HTTPHEADER, array(
         'Content-Type: application/json',
         'Content-Length: ' . strlen($payload),
-        'Authorization: Bearer '. options['arruan_attendee_sendgrid_api_key'])
+        'Authorization: Bearer '. $options['arruan_attendee_sendgrid_api_key'])
     );
 
     // Submit the POST request
