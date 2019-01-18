@@ -358,7 +358,8 @@ function arruan_attendee_post_action() {
 }
 
 function arruan_get_attendee_table_content($attendee) {
-    $ret = "<tr id='arruan-attendee-".$attendee['userId']."'><td>".$attendee['userName']."</td><td>".($attendee['playing'] ? 'Oui' : 'Non')."</td><td>".($attendee['eating'] ? 'Oui' : 'Non')."</td></tr>";
+    $userNameHtml = $attendee['playing'] || $attendee['eating'] ? $attendee['userName'] : "<s>".$attendee['userName']."</s>";
+    $ret = "<tr id='arruan-attendee-".$attendee['userId']."'><td>".$userNameHtml."</td><td>".($attendee['playing'] ? 'Oui' : 'Non')."</td><td>".($attendee['eating'] ? 'Oui' : 'Non')."</td></tr>";
     $friends = $attendee['friends'];
     if (isset($friends)) {
         foreach($friends as $idx=>$friend) {
