@@ -44,7 +44,7 @@ function sendArruanAttendeeStatus(status, postId, friends = 0) {
                 jQuery('#arruan-attendee-'+ resp.data.attendeeId).remove();
                 jQuery('[id^="arruan-attendee-'+ resp.data.attendeeId + '-friend"]').remove();
 
-                jQuery('#arruan-attendee-table > tbody:last-child').append(jQuery.parseHTML(resp.data.html));
+                jQuery('#arruan-attendee-table > tbody').prepend(jQuery.parseHTML(resp.data.html));
                 jQuery('#arruan-attendee-form').fadeOut(300, function() { jQuery(this).remove(); });
                 jQuery('#arruan-attendee-opinion-change-container').show();
                 jQuery('#arruan-attendee-opinion-change-form').hide();
