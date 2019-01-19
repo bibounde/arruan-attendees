@@ -345,7 +345,7 @@ function arruan_attendee_post_action() {
             }
         }
     }
-    update_post_meta($postId, 'arruanAttendees', json_encode($newAttendees));
+    update_post_meta($postId, 'arruanAttendees', json_encode($newAttendees, JSON_UNESCAPED_UNICODE));
 
     $ret = array();
     $ret['players'] = $playerCount;
