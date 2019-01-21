@@ -21,11 +21,59 @@ jQuery(document).on('click', '#arruan-attendee-opinion-change-link', function(e)
 // Do not use submit event due to comment subscription button conflict
 jQuery(document).on('click', '#arruan-attendee-opinion-change-submit', function(e) {
     e.preventDefault();
-    sendArruanAttendeeStatus(jQuery('#arruan-attendee-opinion-change-status').val(), jQuery('#arruan-attendee-opinion-change-post-id').val(), jQuery('#arruan-attendee-opinion-change-friends').val());
+
+    var playingAndEatingFriends = new Array();
+    var playingOnlyFriends = new Array();
+
+    var json = jQuery('#arruan-attendee-opinion-change-friends-eating').val();
+    if ("" != json) {
+        var valueItems = JSON.parse(json);
+        for (i = 0; i < valueItems.length; i++) {
+            playingAndEatingFriends.push(valueItems[i]['value']);
+        }    
+    }
+    
+    json = jQuery('#arruan-attendee-opinion-change-friends-playing-only').val();
+    if ("" != json) {
+        valueItems = JSON.parse(json);    
+        for (i = 0; i < valueItems.length; i++) {
+            playingOnlyFriends.push(valueItems[i]['value']);
+        }
+    }
+
+    sendArruanAttendeeStatus(
+        jQuery('#arruan-attendee-opinion-change-status').val(), 
+        jQuery('#arruan-attendee-opinion-change-post-id').val(), 
+        playingAndEatingFriends,
+        playingOnlyFriends
+    );
 });
 
+jQuery(document).ready(function() {
+    jQuery('#arruan-attendee-opinion-change-friends-eating').tagify({
+        delimiters          : ","
+    }).on('add', function(e, tag){
+        jQuery(tag.tag.parentElement).children('div').addClass('empty_placeholder');
+    }).on('remove', function(e, tag){
+        if (JSON.parse(this.value).length == 0) {
+            jQuery(tag.tag.parentElement).children('div').removeClass('empty_placeholder');
+        }
+    });
+});
 
-function sendArruanAttendeeStatus(status, postId, friends = 0) {
+jQuery(document).ready(function() {
+    jQuery('#arruan-attendee-opinion-change-friends-playing-only').tagify({
+        delimiters          : ","
+    }).on('add', function(e, tag){
+        jQuery(tag.tag.parentElement).children('div').addClass('empty_placeholder');
+    }).on('remove', function(e, tag){
+        if (JSON.parse(this.value).length == 0) {
+            jQuery(tag.tag.parentElement).children('div').removeClass('empty_placeholder');
+        }
+    });
+});
+
+function sendArruanAttendeeStatus(status, postId, playingAndEatingFriends = [], playingOnlyFriends = []) {
     jQuery.ajax({
         url : arruan_attendee_post_url,
         method : 'POST',
@@ -33,7 +81,8 @@ function sendArruanAttendeeStatus(status, postId, friends = 0) {
             'action' : 'arruan-attendee-post',
             'value' : status,
             'postId' : postId,
-            'friends' : friends
+            'eatingFriends' : playingAndEatingFriends.join("|"),
+            'playingOnlyFriends' : playingOnlyFriends.join("|")
         },
 	success : function(resp) {
             if ( resp.success ) {
@@ -48,6 +97,8 @@ function sendArruanAttendeeStatus(status, postId, friends = 0) {
                 jQuery('#arruan-attendee-form').fadeOut(300, function() { jQuery(this).remove(); });
                 jQuery('#arruan-attendee-opinion-change-container').show();
                 jQuery('#arruan-attendee-opinion-change-form').hide();
+                jQuery('#arruan-attendee-opinion-change-friends-eating').data('tagify').removeAllTags();
+                jQuery('#arruan-attendee-opinion-change-friends-playing-only').data('tagify').removeAllTags();
             }
 	},
 	error : function(resp) {

@@ -259,10 +259,14 @@ function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $ev
 */
 add_action( 'wp_enqueue_scripts', 'arruan_attendee_enqueue' );
 function arruan_attendee_enqueue() {
-    wp_enqueue_script('arruan-attendee-script-ajax', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
-    wp_localize_script('arruan-attendee-script-ajax', 'arruan_attendee_post_url', admin_url('admin-ajax.php'));
+    wp_enqueue_script('arruan-attendee-script', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
+    wp_localize_script('arruan-attendee-script', 'arruan_attendee_post_url', admin_url('admin-ajax.php'));
+    wp_enqueue_script('arruan-attendee-script-tagify', plugin_dir_url( __FILE__ )  . 'public/js/tagify.min.js');
+    
     wp_register_style('arruan-attendee-style', plugin_dir_url( __FILE__ )  . 'public/css/style.css');
     wp_enqueue_style('arruan-attendee-style');
+    wp_register_style('arruan-attendee-style-tagify', plugin_dir_url( __FILE__ )  . 'public/css/tagify.css');
+    wp_enqueue_style('arruan-attendee-style-tagify');
 }
 
 add_action( 'wp_ajax_arruan-attendee-post', 'arruan_attendee_post_action');
@@ -277,15 +281,26 @@ function arruan_attendee_post_action() {
         wp_send_json_error('Operation not permitted');
     }
 
-    
-
     $value = $_POST['value'];
     $postId = $_POST['postId'];
-    $friendCount = $_POST['friends'];
 
-    if (!isset($value) || !isset($postId) || !isset($friendCount)) {
+    arruan_attendee_debug("Posting attendee details on post ". $postId .": " . $value . "[eating: " . $_POST['eatingFriends'] . ", playingOnly:" .$_POST['eatingFriends']."]");
+    
+
+    if (!isset($value) || !isset($postId)) {
         wp_send_json_error('Invalid params');
     }
+
+    $playingAndEatingFriends = [];
+    if (!empty($_POST['eatingFriends'])) {
+        $playingAndEatingFriends = explode("|", $_POST['eatingFriends']);
+    }
+    $playingOnlyFriends = [];
+    if (!empty($_POST['playingOnlyFriends'])) {
+        $playingOnlyFriends = explode("|", $_POST['playingOnlyFriends']);
+    }
+
+    $friendCount = sizeof($playingAndEatingFriends) + sizeof($playingOnlyFriends);
 
     $playerCount = 0;
     $eaterCount = 0;
@@ -311,15 +326,23 @@ function arruan_attendee_post_action() {
 
     if ($friendCount > 0) {
         $playerCount += $friendCount;
-        $friends = [];
-        for ($i = 0; $i < $friendCount; $i++) {
+        $friendLists = [];
+
+        foreach ($playingAndEatingFriends as $friendName) {
             $friend = [];
-            // TODO: manage eating of friends
-            $friend['eating'] = false;
-            array_push($friends, $friend);
+            $friend['name'] = htmlspecialchars($friendName);
+            $friend['eating'] = true;
+            array_push($friendLists, $friend);
         }
-        $newAttendee['friends'] = $friends;
+        foreach ($playingOnlyFriends as $friendName) {
+            $friend = [];
+            $friend['name'] = htmlspecialchars($friendName);
+            $friend['eating'] = false;
+            array_push($friendLists, $friend);
+        }
+        $newAttendee['friends'] = $friendLists;
     }
+
 
     $newAttendees = [$newAttendee];
     $attendeesArray = get_post_custom_values('arruanAttendees', $postId);
@@ -358,12 +381,12 @@ function arruan_attendee_post_action() {
 }
 
 function arruan_get_attendee_table_content($attendee) {
-    $userNameHtml = $attendee['playing'] || $attendee['eating'] ? $attendee['userName'] : "<s>".$attendee['userName']."</s>";
+    $userNameHtml = $attendee['playing'] || $attendee['eating'] ? stripslashes($attendee['userName']) : "<s>".stripslashes($attendee['userName'])."</s>";
     $ret = "<tr id='arruan-attendee-".$attendee['userId']."'><td>".$userNameHtml."</td><td>".($attendee['playing'] ? 'Oui' : 'Non')."</td><td>".($attendee['eating'] ? 'Oui' : 'Non')."</td></tr>";
     $friends = $attendee['friends'];
     if (isset($friends)) {
         foreach($friends as $idx=>$friend) {
-            $ret .= "<tr id='arruan-attendee-".$attendee['userId']."-friend-".$idx."'><td>Pote &laquo;&nbsp;à&nbsp;&raquo; ".$attendee['userName']."</td><td>Oui</td><td>".($friend['eating'] ? 'Oui' : 'Non')."</td></tr>";
+            $ret .= "<tr id='arruan-attendee-".$attendee['userId']."-friend-".$idx."'><td>".stripslashes($friend['name'])."</td><td>Oui</td><td>".($friend['eating'] ? 'Oui' : 'Non')."</td></tr>";
         }
     } 
     return $ret;
@@ -456,7 +479,8 @@ function arruan_display_attendee_content($atts) {
             <option value="player_only">Je viens seulement</option>
             <option value="no_player">J'abandonne les copains</option>
         </select>
-        <input type="number" id="arruan-attendee-opinion-change-friends" placeholder="Des amis à amener ?"/>
+        <textarea id="arruan-attendee-opinion-change-friends-eating" placeholder="Des amis qui jouent et restent manger ?"></textarea>
+        <textarea id="arruan-attendee-opinion-change-friends-playing-only" placeholder="Des amis qui jouent mais partent avant la 3eme ?"></textarea>
         <input type="button" id="arruan-attendee-opinion-change-submit" value="Valider"/>
         <input id="arruan-attendee-opinion-change-post-id" type="hidden" value="<?php echo $postid ?>">
     <p/>
