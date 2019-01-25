@@ -10,7 +10,21 @@ jQuery(document).on( 'click', '#arruan-attendee-player-only', function(e) {
 
 jQuery(document).on( 'click', '#arruan-attendee-no-player', function(e) {
     e.preventDefault();
-    sendArruanAttendeeStatus('no_player', jQuery('#arruan-attendee-post-id').val());
+    jQuery('#arruan-attendee-player-and-eater').hide();
+    jQuery('#arruan-attendee-player-only').hide();
+    jQuery('#arruan-attendee-no-player').hide();
+
+    jQuery('#arruan-attendee-no-player-options').show();
+});
+
+jQuery(document).on( 'click', '#arruan-attendee-eater_only', function(e) {
+    e.preventDefault();
+    sendArruanAttendeeStatus('eater_only', jQuery('#arruan-attendee-post-id').val());
+});
+
+jQuery(document).on( 'click', '#arruan-attendee-absent', function(e) {
+    e.preventDefault();
+    sendArruanAttendeeStatus('absent', jQuery('#arruan-attendee-post-id').val());
 });
 
 jQuery(document).on('click', '#arruan-attendee-opinion-change-link', function(e) {
@@ -97,8 +111,6 @@ function sendArruanAttendeeStatus(status, postId, playingAndEatingFriends = [], 
                 jQuery('#arruan-attendee-form').fadeOut(300, function() { jQuery(this).remove(); });
                 jQuery('#arruan-attendee-opinion-change-container').show();
                 jQuery('#arruan-attendee-opinion-change-form').hide();
-                jQuery('#arruan-attendee-opinion-change-friends-eating').data('tagify').removeAllTags();
-                jQuery('#arruan-attendee-opinion-change-friends-playing-only').data('tagify').removeAllTags();
             }
 	},
 	error : function(resp) {

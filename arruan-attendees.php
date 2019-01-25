@@ -318,6 +318,10 @@ function arruan_attendee_post_action() {
         $newAttendee['playing'] = true;
         $newAttendee['eating'] = false;
         $playerCount = 1;
+    } else if ($value === 'eater_only') {
+        $newAttendee['playing'] = false;
+        $newAttendee['eating'] = true;
+        $eaterCount = 1;
     } else {
         $newAttendee['playing'] = false;
         $newAttendee['eating'] = false;
@@ -357,7 +361,7 @@ function arruan_attendee_post_action() {
                 } else {
                     $absentCount++;
                 }
-                if ($attendee['playing']) {
+                if ($attendee['eating']) {
                     $eaterCount++;
                 }
                 $attendeeFriends = $attendee['friends'];
@@ -405,7 +409,8 @@ function arruan_display_attendee_content($atts) {
     $eaterCount = 0;
     $absentCount = 0;
     $attendees = [];
-    $currentUserIsAnAttendee = false;
+    $currentAttendee = null;
+
 
     $attendeesArray = get_post_custom_values('arruanAttendees', $postid);
     if (isset($attendeesArray)) {
@@ -420,7 +425,7 @@ function arruan_display_attendee_content($atts) {
                 $eaterCount++;
             }
             if ($current_user->ID === $attendee['userId']) {
-                $currentUserIsAnAttendee = true;
+                $currentAttendee = $attendee;
             }
             $friends = $attendee['friends'];
             if (isset($friends)) {
@@ -432,8 +437,8 @@ function arruan_display_attendee_content($atts) {
         }
     }
     $isAllowedToBeAnAttendee = 'true' == get_user_meta($current_user->ID, 'arruan_attendee', true);
-    $displayForm = $current_user->ID != 0 && !$currentUserIsAnAttendee && $isAllowedToBeAnAttendee;
-    $displayOpinionChangeLink = $current_user->ID != 0 && $currentUserIsAnAttendee && $isAllowedToBeAnAttendee;
+    $displayForm = $current_user->ID != 0 && !isset($currentAttendee) && $isAllowedToBeAnAttendee;
+    $displayOpinionChangeLink = $current_user->ID != 0 && isset($currentAttendee) && $isAllowedToBeAnAttendee;
 
     // begin output buffering
     ob_start();
@@ -443,6 +448,11 @@ function arruan_display_attendee_content($atts) {
             <input type="submit" id="arruan-attendee-player-and-eater" value="Je viens et je mange"/>
             <input type="submit" id="arruan-attendee-player-only" value="Je viens seulement"/>
             <input type="submit" id="arruan-attendee-no-player" value="J'abandonne les copains"/>
+            <div style="display:none" id="arruan-attendee-no-player-options">
+                <p >Tu ne viens pas jouer, mais tu manges avec nous ?</p>
+                <input type="submit" id="arruan-attendee-eater_only" value="Je reste manger"/>
+                <input type="submit" id="arruan-attendee-absent" value="Non ! Je ne mange pas non plus"/>
+            </div>
             <input id="arruan-attendee-post-id" type="hidden" value="<?php echo $postid ?>">
         </form>
         <br style="clear:both">
@@ -475,12 +485,27 @@ function arruan_display_attendee_content($atts) {
     <!-- Not a form to avoid comment subscription conflict -->
     <p id="arruan-attendee-opinion-change-form" style="display:none">
         <select id="arruan-attendee-opinion-change-status">
-            <option value="player_and_eater">Je viens et je mange</option>
-            <option value="player_only">Je viens seulement</option>
-            <option value="no_player">J'abandonne les copains</option>
+            <option value="player_and_eater" <?php echo ($currentAttendee['playing'] && $currentAttendee['eating'] ? 'selected': ''); ?>>Je viens et je mange</option>
+            <option value="player_only" <?php echo ($currentAttendee['playing'] && !$currentAttendee['eating'] ? 'selected': ''); ?>>Je viens seulement</option>
+            <option value="eater_only" <?php echo (!$currentAttendee['playing'] && $currentAttendee['eating'] ? 'selected': ''); ?>>J'abandonne les copains (mais je mange)</option>
+            <option value="absent" <?php echo (!$currentAttendee['playing'] && !$currentAttendee['eating'] ? 'selected': ''); ?>>J'abandonne vraiment les copains</option>
         </select>
-        <textarea id="arruan-attendee-opinion-change-friends-eating" placeholder="Des amis qui jouent et restent manger ?"></textarea>
-        <textarea id="arruan-attendee-opinion-change-friends-playing-only" placeholder="Des amis qui jouent mais partent avant la 3eme ?"></textarea>
+
+        <?php 
+            $currentAttendeeEatingFriendNames = [];
+            $currentAttendeePlayingOnlyFriendNames = [];
+
+            foreach ($currentAttendee['friends'] as $friend) {
+                if ($friend['eating']) {
+                    array_push($currentAttendeeEatingFriendNames, $friend['name']);
+                } else {
+                    array_push($currentAttendeePlayingOnlyFriendNames, $friend['name']);
+                }
+            }
+
+        ?>
+        <input id="arruan-attendee-opinion-change-friends-eating" placeholder="Des amis qui jouent et restent manger ?" value="<?php echo join(',', $currentAttendeeEatingFriendNames); ?>" style="display:none;"/>
+        <input id="arruan-attendee-opinion-change-friends-playing-only" placeholder="Des amis qui jouent mais partent avant la 3eme ?" value="<?php echo join(',', $currentAttendeePlayingOnlyFriendNames); ?>" style="display:none;"/>
         <input type="button" id="arruan-attendee-opinion-change-submit" value="Valider"/>
         <input id="arruan-attendee-opinion-change-post-id" type="hidden" value="<?php echo $postid ?>">
     <p/>
