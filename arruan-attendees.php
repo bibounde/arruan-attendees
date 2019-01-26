@@ -6,6 +6,10 @@ Version: 0.1
 Domain Path: /languages
 */
 
+function arruan_attendee_version_id() {
+    return '0.1';
+}
+
 
 /*
     Mailing management
@@ -259,13 +263,13 @@ function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $ev
 */
 add_action( 'wp_enqueue_scripts', 'arruan_attendee_enqueue' );
 function arruan_attendee_enqueue() {
-    wp_enqueue_script('arruan-attendee-script', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery') );
+    wp_enqueue_script('arruan-attendee-script', plugin_dir_url( __FILE__ )  . 'public/js/script.js', array('jquery'), arruan_attendee_version_id());
     wp_localize_script('arruan-attendee-script', 'arruan_attendee_post_url', admin_url('admin-ajax.php'));
-    wp_enqueue_script('arruan-attendee-script-tagify', plugin_dir_url( __FILE__ )  . 'public/js/tagify.min.js');
+    wp_enqueue_script('arruan-attendee-script-tagify', plugin_dir_url( __FILE__ )  . 'public/js/tagify.min.js', array(), arruan_attendee_version_id());
     
-    wp_register_style('arruan-attendee-style', plugin_dir_url( __FILE__ )  . 'public/css/style.css');
+    wp_register_style('arruan-attendee-style', plugin_dir_url( __FILE__ )  . 'public/css/style.css', array(), arruan_attendee_version_id());
     wp_enqueue_style('arruan-attendee-style');
-    wp_register_style('arruan-attendee-style-tagify', plugin_dir_url( __FILE__ )  . 'public/css/tagify.css');
+    wp_register_style('arruan-attendee-style-tagify', plugin_dir_url( __FILE__ )  . 'public/css/tagify.css', array(), arruan_attendee_version_id());
     wp_enqueue_style('arruan-attendee-style-tagify');
 }
 
