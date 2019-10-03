@@ -177,83 +177,25 @@ function arruan_attendee_cron_send_event_reminder_email_exec($level) {
 function arruan_attendee_send_remind_email($target, $eventTitle, $eventDate, $eventLink) {
     arruan_attendee_debug("Sending remind to " . $target);
 
-    $options = get_option('arruan_attendee_options');
+    $message  = "<h2>Le club a besoin de toi</h2>";
+    $message .= "<p>Tu n'a pas précisé si tu venais le ".date_i18n('l j F Y', $eventDate->getTimestamp()).". Que tu joues, que tu passes boire un coup ou que tu restes chez toi, dis-le sur le site des Arruanais !</p>";
+    $message .= "<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">";
+    $message .= "  <tr>";
+    $message .= "      <td>";
+    $message .= "          <table cellspacing=\"0\" cellpadding=\"0\" align=\"center\">";
+    $message .= "              <tr>";
+    $message .= "                  <td style=\"border-radius: 2px;\" bgcolor=\"#d65050\">";
+    $message .= "                      <a href=\"".$eventLink."\" target=\"_blank\" style=\"padding: 8px 12px; border: 1px solid #d65050;border-radius: 2px;font-family: Helvetica, Arial, sans-serif;font-size: 14px; color: #ffffff;text-decoration: none;font-weight:bold;display: inline-block;\">";
+    $message .= "                          Préviens-nous";             
+    $message .= "                      </a>";
+    $message .= "                  </td>";
+    $message .= "              </tr>";
+    $message .= "          </table>";
+    $message .= "      </td>";
+    $message .= "  </tr>";
+    $message .= "</table>";
 
-    // See https://sendgrid.com/docs/ui/sending-email/how-to-send-an-email-with-dynamic-transactional-templates/#additional-resources for json construction
-    $data = array();
-    $data['template_id'] = $options['arruan_attendee_sendgrid_template_id'];
-    $from = array(
-        'email' => $options['arruan_attendee_sendgrid_from']
-    );
-    $data['from'] = $from;
-
-    $personalization = array();
-    $personalization['subject'] = $eventTitle;
-    $tos = array();
-    $to = array(
-        'email' => $target
-    );
-    $tos[] = $to;
-
-    $personalization['to'] = $tos;
-
-    $templateData = array();
-
-    $formattedDate = date_i18n('l j F Y', $eventDate->getTimestamp());
-
-    $event = array(
-        'title' => $eventTitle,
-        'date' => $formattedDate,
-        'link' => $eventLink
-    );
-
-    $templateData['event'] = $event;
-    $personalization['dynamic_template_data'] = $templateData;
-
-    $personalizations = array();
-    array_push($personalizations, $personalization);
-
-    $data['personalizations'] = $personalizations;
-
-    $payload = json_encode($data, JSON_UNESCAPED_SLASHES);
-
-    arruan_attendee_debug("Calling Sendgrid API: ". $payload);
-
-    
-    // Prepare new cURL resource
-    $ch = curl_init('https://api.sendgrid.com/v3/mail/send');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLINFO_HEADER_OUT, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-
-    // Set HTTP Header for POST request 
-    curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-        'Content-Type: application/json',
-        'Content-Length: ' . strlen($payload),
-        'Authorization: Bearer '. $options['arruan_attendee_sendgrid_api_key'])
-    );
-
-    // Submit the POST request
-    $result = curl_exec($ch);
-
-    // Vérification si une erreur est survenue
-    if(curl_errno($ch)) {
-        $info = curl_getinfo($ch);
-        arruan_attendee_error("Unable to send email to " . $target . ". Error code: " . $info['http_code']);
-    } else {
-        $resultArray = json_decode($result, true);
-
-        if (isset($resultArray['errors'])) {
-            arruan_attendee_error("Unable to send email to " . $target . ": " . $result);
-        } else {
-            arruan_attendee_debug("Email sent to ". $target);    
-        }
-    }
-
-    // Close cURL session handle
-    curl_close($ch); 
-    
+    wp_mail($target, 'N\'oublie pas de t\'inscrire', $message);
 }
 
 /**
