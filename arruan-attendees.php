@@ -2,12 +2,12 @@
 /*
 Plugin Name: Arruan Attendee List
 Description: Gestion de la liste des participants aux matchs et entraînements
-Version: 0.1
+Version: 0.2
 Domain Path: /languages
 */
 
 function arruan_attendee_version_id() {
-    return '0.1';
+    return '0.2';
 }
 
 
